@@ -1,5 +1,5 @@
 // === [Procesador de imágenes basado en Blue Marble] ===
-import { log } from "../core/logger.js";
+import { log } from '../core/logger.js';
 
 /**
  * Procesador de imágenes con arquitectura Blue Marble
@@ -10,12 +10,12 @@ export class BlueMarblelImageProcessor {
     this.imageSrc = imageSrc;
     this.img = new window.Image();
     this.originalName = null;
-    
+
     // Configuración Blue Marble
     this.tileSize = 1000; // Tamaño de tile en píxeles (como Blue Marble)
     this.drawMult = 3; // Factor de escalado (DEBE ser impar)
     this.shreadSize = 3; // Alias para drawMult para compatibilidad
-    
+
     // Estado del procesamiento
     this.bitmap = null;
     this.imageWidth = 0;
@@ -40,8 +40,10 @@ export class BlueMarblelImageProcessor {
           this.imageWidth = this.bitmap.width;
           this.imageHeight = this.bitmap.height;
           this.totalPixels = this.imageWidth * this.imageHeight;
-          
-          log(`[BLUE MARBLE] Imagen cargada: ${this.imageWidth}×${this.imageHeight} = ${this.totalPixels.toLocaleString()} píxeles`);
+
+          log(
+            `[BLUE MARBLE] Imagen cargada: ${this.imageWidth}×${this.imageHeight} = ${this.totalPixels.toLocaleString()} píxeles`,
+          );
           resolve();
         } catch (error) {
           reject(error);
@@ -57,15 +59,15 @@ export class BlueMarblelImageProcessor {
    */
   initializeColorPalette() {
     log('[BLUE MARBLE] Inicializando paleta de colores...');
-    
+
     // Detectar colores disponibles del sitio (mejorado)
     const availableColors = this.detectSiteColors();
-    
+
     // Construir conjunto de colores permitidos
     this.allowedColorsSet = new Set(
       availableColors
-        .filter(c => c.name && c.name.toLowerCase() !== 'transparent' && Array.isArray(c.rgb))
-        .map(c => `${c.rgb[0]},${c.rgb[1]},${c.rgb[2]}`)
+        .filter((c) => c.name && c.name.toLowerCase() !== 'transparent' && Array.isArray(c.rgb))
+        .map((c) => `${c.rgb[0]},${c.rgb[1]},${c.rgb[2]}`),
     );
 
     // Asegurar que #deface (marcador de transparencia) se trate como permitido
@@ -75,25 +77,27 @@ export class BlueMarblelImageProcessor {
     // Mapear RGB a metadatos
     this.rgbToMeta = new Map(
       availableColors
-        .filter(c => Array.isArray(c.rgb))
-        .map(c => [
-          `${c.rgb[0]},${c.rgb[1]},${c.rgb[2]}`, 
-          { 
-            id: c.id, 
-            premium: !!c.premium, 
-            name: c.name || `Color ${c.id}` 
-          }
-        ])
+        .filter((c) => Array.isArray(c.rgb))
+        .map((c) => [
+          `${c.rgb[0]},${c.rgb[1]},${c.rgb[2]}`,
+          {
+            id: c.id,
+            premium: !!c.premium,
+            name: c.name || `Color ${c.id}`,
+          },
+        ]),
     );
 
     // Mapear #deface a Transparent para UI
     try {
-      const transparent = availableColors.find(c => c.name && c.name.toLowerCase() === 'transparent');
+      const transparent = availableColors.find(
+        (c) => c.name && c.name.toLowerCase() === 'transparent',
+      );
       if (transparent && Array.isArray(transparent.rgb)) {
-        this.rgbToMeta.set(defaceKey, { 
-          id: transparent.id, 
-          premium: !!transparent.premium, 
-          name: transparent.name 
+        this.rgbToMeta.set(defaceKey, {
+          id: transparent.id,
+          premium: !!transparent.premium,
+          name: transparent.name,
         });
       }
     } catch (_) {}
@@ -108,36 +112,32 @@ export class BlueMarblelImageProcessor {
   detectSiteColors() {
     const colorElements = document.querySelectorAll('[id^="color-"]');
     const colors = [];
-    
+
     for (const element of colorElements) {
       // Filtrar elementos con SVG (probablemente bloqueos)
       if (element.querySelector('svg')) continue;
-      
+
       const idStr = element.id.replace('color-', '');
       const id = parseInt(idStr);
-      
+
       // Obtener color RGB del style
       const backgroundStyle = element.style.backgroundColor;
       if (backgroundStyle) {
         const rgbMatch = backgroundStyle.match(/\d+/g);
         if (rgbMatch && rgbMatch.length >= 3) {
-          const rgb = [
-            parseInt(rgbMatch[0]),
-            parseInt(rgbMatch[1]),
-            parseInt(rgbMatch[2])
-          ];
-          
+          const rgb = [parseInt(rgbMatch[0]), parseInt(rgbMatch[1]), parseInt(rgbMatch[2])];
+
           colors.push({
             id,
             element,
             rgb,
             name: element.title || element.getAttribute('aria-label') || `Color ${id}`,
-            premium: element.classList.contains('premium') || element.querySelector('.premium')
+            premium: element.classList.contains('premium') || element.querySelector('.premium'),
           });
         }
       }
     }
-    
+
     log(`[BLUE MARBLE] ${colors.length} colores detectados del sitio`);
     return colors;
   }
@@ -147,7 +147,9 @@ export class BlueMarblelImageProcessor {
    */
   setCoords(tileX, tileY, pixelX, pixelY) {
     this.coords = [tileX, tileY, pixelX, pixelY];
-    log(`[BLUE MARBLE] Coordenadas establecidas: tile(${tileX},${tileY}) pixel(${pixelX},${pixelY})`);
+    log(
+      `[BLUE MARBLE] Coordenadas establecidas: tile(${tileX},${tileY}) pixel(${pixelX},${pixelY})`,
+    );
   }
 
   /**
@@ -218,21 +220,20 @@ export class BlueMarblelImageProcessor {
         requiredPixels: required,
         defacePixels: deface,
         uniqueColors: paletteMap.size,
-        colorPalette: paletteObj
+        colorPalette: paletteObj,
       };
-
     } catch (err) {
       // Fallback si OffscreenCanvas no está disponible
       this.requiredPixelCount = Math.max(0, this.totalPixels);
       this.defacePixelCount = 0;
       log('[BLUE MARBLE] Fallback: usando total de píxeles como requeridos');
-      
+
       return {
         totalPixels: this.totalPixels,
         requiredPixels: this.totalPixels,
         defacePixels: 0,
         uniqueColors: 0,
-        colorPalette: {}
+        colorPalette: {},
       };
     }
   }
@@ -249,26 +250,24 @@ export class BlueMarblelImageProcessor {
 
     const templateTiles = {};
     const templateTilesBuffers = {};
-    
+
     const canvas = new OffscreenCanvas(this.tileSize, this.tileSize);
     const context = canvas.getContext('2d', { willReadFrequently: true });
 
     // Para cada tile Y...
     for (let pixelY = this.coords[3]; pixelY < this.imageHeight + this.coords[3]; ) {
-      
       // Calcular tamaño de dibujo Y
       const drawSizeY = Math.min(
-        this.tileSize - (pixelY % this.tileSize), 
-        this.imageHeight - (pixelY - this.coords[3])
+        this.tileSize - (pixelY % this.tileSize),
+        this.imageHeight - (pixelY - this.coords[3]),
       );
 
       // Para cada tile X...
       for (let pixelX = this.coords[2]; pixelX < this.imageWidth + this.coords[2]; ) {
-        
         // Calcular tamaño de dibujo X
         const drawSizeX = Math.min(
-          this.tileSize - (pixelX % this.tileSize), 
-          this.imageWidth - (pixelX - this.coords[2])
+          this.tileSize - (pixelX % this.tileSize),
+          this.imageWidth - (pixelX - this.coords[2]),
         );
 
         // Cambiar tamaño del canvas y limpiar
@@ -290,7 +289,7 @@ export class BlueMarblelImageProcessor {
           0, // Coordenada X donde dibujar
           0, // Coordenada Y donde dibujar
           drawSizeX * this.shreadSize, // Ancho X donde dibujar
-          drawSizeY * this.shreadSize // Alto Y donde dibujar
+          drawSizeY * this.shreadSize, // Alto Y donde dibujar
         );
 
         const imageData = context.getImageData(0, 0, canvasWidth, canvasHeight);
@@ -299,7 +298,7 @@ export class BlueMarblelImageProcessor {
         for (let y = 0; y < canvasHeight; y++) {
           for (let x = 0; x < canvasWidth; x++) {
             const pixelIndex = (y * canvasWidth + x) * 4;
-            
+
             // Si el píxel es #deface, dibujar patrón de tablero de ajedrez translúcido
             if (
               imageData.data[pixelIndex] === 222 &&
@@ -343,10 +342,10 @@ export class BlueMarblelImageProcessor {
           .padStart(3, '0')},${(pixelY % 1000).toString().padStart(3, '0')}`;
 
         templateTiles[templateTileName] = await createImageBitmap(canvas);
-        
+
         // Registrar prefijo de tile para búsqueda rápida
         this.tilePrefixes.add(templateTileName.split(',').slice(0, 2).join(','));
-        
+
         // Almacenar buffer para serialización
         const canvasBlob = await canvas.convertToBlob();
         const canvasBuffer = await canvasBlob.arrayBuffer();
@@ -403,7 +402,7 @@ export class BlueMarblelImageProcessor {
         if (r === 222 && g === 250 && b === 206) continue;
 
         const colorKey = `${r},${g},${b}`;
-        
+
         // Solo incluir colores de la paleta del sitio
         if (!this.allowedColorsSet.has(colorKey)) continue;
 
@@ -438,9 +437,9 @@ export class BlueMarblelImageProcessor {
             g: g,
             b: b,
             id: colorMeta.id,
-            name: colorMeta.name
+            name: colorMeta.name,
           },
-          originalColor: { r, g, b, alpha }
+          originalColor: { r, g, b, alpha },
         });
       }
     }
@@ -482,7 +481,7 @@ export class BlueMarblelImageProcessor {
     this.img.src = newDataUrl;
     this.imageSrc = newDataUrl;
 
-    await new Promise(resolve => {
+    await new Promise((resolve) => {
       this.img.onload = async () => {
         this.bitmap = await createImageBitmap(this.img);
         this.imageWidth = this.bitmap.width;
@@ -492,11 +491,13 @@ export class BlueMarblelImageProcessor {
       };
     });
 
-    log(`[BLUE MARBLE] Imagen redimensionada: ${originalWidth}×${originalHeight} → ${this.imageWidth}×${this.imageHeight}`);
-    
+    log(
+      `[BLUE MARBLE] Imagen redimensionada: ${originalWidth}×${originalHeight} → ${this.imageWidth}×${this.imageHeight}`,
+    );
+
     return {
       width: this.imageWidth,
-      height: this.imageHeight
+      height: this.imageHeight,
     };
   }
 
@@ -514,7 +515,7 @@ export class BlueMarblelImageProcessor {
       coords: [...this.coords],
       originalName: this.originalName || 'image.png',
       // Para compatibilidad con Auto-Image actual
-      pixels: this.generatePixelQueue()
+      pixels: this.generatePixelQueue(),
     };
   }
 
@@ -550,34 +551,34 @@ export class BlueMarblelImageProcessor {
   getDimensions() {
     return {
       width: this.imageWidth,
-      height: this.imageHeight
+      height: this.imageHeight,
     };
   }
 }
 
 // Mantener exports de funciones para compatibilidad
-export { detectAvailableColors } from "./processor.js";
+export { detectAvailableColors } from './processor.js';
 
 export function findClosestColor(rgb, palette) {
   if (!palette || palette.length === 0) return null;
-  
+
   let closestColor = null;
   let minDistance = Infinity;
-  
+
   for (const color of palette) {
     const colorRgb = color.rgb || color;
     const distance = Math.sqrt(
       Math.pow(rgb.r - colorRgb.r, 2) +
-      Math.pow(rgb.g - colorRgb.g, 2) +
-      Math.pow(rgb.b - colorRgb.b, 2)
+        Math.pow(rgb.g - colorRgb.g, 2) +
+        Math.pow(rgb.b - colorRgb.b, 2),
     );
-    
+
     if (distance < minDistance) {
       minDistance = distance;
       closestColor = color;
     }
   }
-  
+
   return closestColor;
 }
 
@@ -590,10 +591,10 @@ export function generatePixelQueue(imageData, startPosition, tileX, tileY) {
 
   for (const pixelData of pixels) {
     if (!pixelData) continue;
-    
+
     const globalX = localStartX + pixelData.imageX;
     const globalY = localStartY + pixelData.imageY;
-    
+
     queue.push({
       imageX: pixelData.imageX,
       imageY: pixelData.imageY,
@@ -602,7 +603,7 @@ export function generatePixelQueue(imageData, startPosition, tileX, tileY) {
       tileX: tileX,
       tileY: tileY,
       color: pixelData.color,
-      originalColor: pixelData.originalColor
+      originalColor: pixelData.originalColor,
     });
   }
 
