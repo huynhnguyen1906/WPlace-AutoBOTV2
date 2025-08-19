@@ -413,12 +413,63 @@ export class BlueMarblelImageProcessor {
     log(`[BLUE MARBLE] 📍 Posición base calculada: global(${baseX}, ${baseY})`);
     log(`[BLUE MARBLE] 📏 Dimensiones imagen: ${this.imageWidth}x${this.imageHeight}`);
 
-    // Usar canvas 1:1 para leer píxeles exactos
     const readCanvas = new OffscreenCanvas(this.imageWidth, this.imageHeight);
     const readCtx = readCanvas.getContext('2d', { willReadFrequently: true });
     readCtx.imageSmoothingEnabled = false;
     readCtx.drawImage(this.bitmap, 0, 0);
     const pixelData = readCtx.getImageData(0, 0, this.imageWidth, this.imageHeight).data;
+
+    // NUEVA LÓGICA: Primero encontrar el primer píxel válido para calcular offset
+    let firstValidPixelX = -1;
+    let firstValidPixelY = -1;
+
+    // Scan para encontrar primer píxel válido
+    outerLoop: for (let y = 0; y < this.imageHeight; y++) {
+      for (let x = 0; x < this.imageWidth; x++) {
+        const idx = (y * this.imageWidth + x) * 4;
+        const r = pixelData[idx];
+        const g = pixelData[idx + 1];
+        const b = pixelData[idx + 2];
+        const alpha = pixelData[idx + 3];
+
+        // Filtrar píxeles transparentes
+        if (alpha === 0) continue;
+
+        // Filtrar píxeles #deface
+        if (r === 222 && g === 250 && b === 206) continue;
+
+        const colorKey = `${r},${g},${b}`;
+
+        // Solo incluir colores de la paleta del sitio
+        if (!this.allowedColorsSet.has(colorKey)) continue;
+
+        // Encontramos el primer píxel válido!
+        firstValidPixelX = x;
+        firstValidPixelY = y;
+        break outerLoop;
+      }
+    }
+
+    if (firstValidPixelX === -1) {
+      log('[BLUE MARBLE] ❌ No se encontraron píxeles válidos en la imagen');
+      return [];
+    }
+
+    log(
+      `[BLUE MARBLE] 🎯 Primer píxel válido encontrado en imagen(${firstValidPixelX}, ${firstValidPixelY})`,
+    );
+
+    // CÁLCULO CORRECTO: Ajustar baseX/baseY para que first valid pixel aparezca en user click position
+    const adjustedBaseX = baseX - firstValidPixelX;
+    const adjustedBaseY = baseY - firstValidPixelY;
+
+    log(`[BLUE MARBLE] � Ajuste aplicado: baseX ${baseX} - ${firstValidPixelX} = ${adjustedBaseX}`);
+    log(
+      `[BLUE MARBLE] 🔧 Ajuste aplicado: baseY ${baseY} - ${firstValidPixelY} = ${adjustedBaseY}`,
+    );
+    log(
+      `[BLUE MARBLE] ✅ Primer píxel se pintará en posición global: (${adjustedBaseX + firstValidPixelX}, ${adjustedBaseY + firstValidPixelY})`,
+    );
 
     for (let y = 0; y < this.imageHeight; y++) {
       for (let x = 0; x < this.imageWidth; x++) {
@@ -439,25 +490,16 @@ export class BlueMarblelImageProcessor {
         // Solo incluir colores de la paleta del sitio
         if (!this.allowedColorsSet.has(colorKey)) continue;
 
-        // Calcular coordenadas globales - AQUÍ está el problema potencial
-        const globalX = baseX + x;
-        const globalY = baseY + y;
+        // USAR COORDENADAS AJUSTADAS
+        const globalX = adjustedBaseX + x;
+        const globalY = adjustedBaseY + y;
 
-        // Log del primer pixel para debugging
+        // Log first pixel để confirm alignment
         if (queue.length === 0) {
-          log(`[BLUE MARBLE] 🔍 ANÁLISIS PRIMER PÍXEL:`);
-          log(
-            `[BLUE MARBLE] 📊 User clicked: pixel(${this.coords[2]}, ${this.coords[3]}) en tile(${this.coords[0]}, ${this.coords[1]})`,
-          );
-          log(
-            `[BLUE MARBLE] 📊 baseX = ${this.coords[0]} * ${this.actualTileSize} + ${this.coords[2]} = ${baseX}`,
-          );
-          log(
-            `[BLUE MARBLE] 📊 baseY = ${this.coords[1]} * ${this.actualTileSize} + ${this.coords[3]} = ${baseY}`,
-          );
-          log(`[BLUE MARBLE] 📊 First valid pixel in image: imagen(${x}, ${y})`);
-          log(`[BLUE MARBLE] 📊 Calculated global position: (${globalX}, ${globalY})`);
-          log(`[BLUE MARBLE] ❓ ¿Debería ser: user_click_global + offset_in_image?`);
+          log(`[BLUE MARBLE] 🎨 PRIMER PÍXEL CON AJUSTE:`);
+          log(`[BLUE MARBLE] 📊 Imagen position: (${x}, ${y})`);
+          log(`[BLUE MARBLE] 📊 Global position: (${globalX}, ${globalY})`);
+          log(`[BLUE MARBLE] ✅ Esto debería coincidir con user click: (${baseX}, ${baseY})`);
         }
 
         // Calcular coordenadas de tile (usar actualTileSize detectado)
@@ -503,13 +545,16 @@ export class BlueMarblelImageProcessor {
 
     log(`[BLUE MARBLE] ✅ Cola generada: ${queue.length} píxeles válidos`);
     log(
-      `[BLUE MARBLE] 📊 Rango de píxeles: X(${baseX}-${baseX + this.imageWidth - 1}), Y(${baseY}-${baseY + this.imageHeight - 1})`,
+      `[BLUE MARBLE] 📊 Rango de píxeles ajustados: X(${adjustedBaseX}-${adjustedBaseX + this.imageWidth - 1}), Y(${adjustedBaseY}-${adjustedBaseY + this.imageHeight - 1})`,
     );
     if (queue.length > 0) {
       const firstPixel = queue[0];
       const lastPixel = queue[queue.length - 1];
       log(`[BLUE MARBLE] 📋 Primer píxel: global(${firstPixel.globalX},${firstPixel.globalY})`);
       log(`[BLUE MARBLE] 📋 Último píxel: global(${lastPixel.globalX},${lastPixel.globalY})`);
+      log(
+        `[BLUE MARBLE] ✅ Confirmación: Primer píxel debería estar en user click (${baseX}, ${baseY})`,
+      );
     }
     return queue;
   }
