@@ -304,10 +304,17 @@ export async function runImage() {
                         // Actualizar coordenadas del procesador Blue Marble
                         if (imageState.imageData && imageState.imageData.processor) {
                           const processor = imageState.imageData.processor;
+                          log(`[AUTO-IMAGE] 🔄 Processor encontrado. Estado antes de setCoords:`);
+                          log(
+                            `[AUTO-IMAGE] 📊 Processor coords actuales: [${processor.coords.join(',')}]`,
+                          );
                           log(
                             `[AUTO-IMAGE] 🔄 Llamando setCoords(${tileX}, ${tileY}, ${localX}, ${localY})`,
                           );
                           processor.setCoords(tileX, tileY, localX, localY);
+                          log(
+                            `[AUTO-IMAGE] 📊 Processor coords después de setCoords: [${processor.coords.join(',')}]`,
+                          );
 
                           // Generar tiles de template una vez que tenemos coordenadas
                           try {
@@ -327,6 +334,16 @@ export async function runImage() {
                           log(
                             `✅ Cola de píxeles generada: ${pixelQueue.length} píxeles para overlay`,
                           );
+                        } else {
+                          log(`[AUTO-IMAGE] ❌ ERROR: Processor no encontrado!`);
+                          log(
+                            `[AUTO-IMAGE] 📊 imageState.imageData existe: ${!!imageState.imageData}`,
+                          );
+                          if (imageState.imageData) {
+                            log(
+                              `[AUTO-IMAGE] 📊 imageState.imageData.processor existe: ${!!imageState.imageData.processor}`,
+                            );
+                          }
                         }
 
                         // Configurar overlay del plan con la posición seleccionada
