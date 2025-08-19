@@ -241,8 +241,13 @@ export async function paintPixelBatch(batch) {
         continue;
       }
 
-      // Validate that we have coordinates and color
-      if (!pixel.localX || !pixel.localY || pixel.tileX == null || pixel.tileY == null) {
+      // Validate that we have coordinates and color - Fixed: allow 0 values
+      if (
+        pixel.localX == null ||
+        pixel.localY == null ||
+        pixel.tileX == null ||
+        pixel.tileY == null
+      ) {
         log('paintPixelBatch: skipping pixel with missing coordinates', pixel);
         continue;
       }
