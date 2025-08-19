@@ -439,9 +439,26 @@ export class BlueMarblelImageProcessor {
         // Solo incluir colores de la paleta del sitio
         if (!this.allowedColorsSet.has(colorKey)) continue;
 
-        // Calcular coordenadas globales
+        // Calcular coordenadas globales - AQUÍ está el problema potencial
         const globalX = baseX + x;
         const globalY = baseY + y;
+
+        // Log del primer pixel para debugging
+        if (queue.length === 0) {
+          log(`[BLUE MARBLE] 🔍 ANÁLISIS PRIMER PÍXEL:`);
+          log(
+            `[BLUE MARBLE] 📊 User clicked: pixel(${this.coords[2]}, ${this.coords[3]}) en tile(${this.coords[0]}, ${this.coords[1]})`,
+          );
+          log(
+            `[BLUE MARBLE] 📊 baseX = ${this.coords[0]} * ${this.actualTileSize} + ${this.coords[2]} = ${baseX}`,
+          );
+          log(
+            `[BLUE MARBLE] 📊 baseY = ${this.coords[1]} * ${this.actualTileSize} + ${this.coords[3]} = ${baseY}`,
+          );
+          log(`[BLUE MARBLE] 📊 First valid pixel in image: imagen(${x}, ${y})`);
+          log(`[BLUE MARBLE] 📊 Calculated global position: (${globalX}, ${globalY})`);
+          log(`[BLUE MARBLE] ❓ ¿Debería ser: user_click_global + offset_in_image?`);
+        }
 
         // Calcular coordenadas de tile (usar actualTileSize detectado)
         const tileX = Math.floor(globalX / this.actualTileSize);
