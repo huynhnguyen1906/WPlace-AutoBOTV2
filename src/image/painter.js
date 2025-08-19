@@ -22,19 +22,35 @@ export async function processImage(imageData, startPosition, onProgress, onCompl
     `Iniciando pintado: imagen(${width}x${height}) inicio LOCAL(${localStartX},${localStartY}) tile(${imageState.tileX},${imageState.tileY})`,
   );
 
-  // Generar cola de píxeles si no existe
+  // Generar cola de píxeles si no existe USANDO BLUE MARBLE PROCESSOR
   if (
     !imageState.remainingPixels ||
     imageState.remainingPixels.length === 0 ||
     (imageState.lastPosition.x === 0 && imageState.lastPosition.y === 0)
   ) {
-    log('Generando cola de píxeles...');
-    imageState.remainingPixels = generatePixelQueue(
-      imageData,
-      startPosition,
-      imageState.tileX,
-      imageState.tileY,
-    );
+    log('🔄 Generando cola de píxeles con Blue Marble Processor...');
+
+    // PRIORIDAD: Usar Blue Marble processor si está disponible
+    if (imageState.imageData && imageState.imageData.processor) {
+      log('✅ Usando Blue Marble processor para generar cola...');
+      const processor = imageState.imageData.processor;
+      imageState.remainingPixels = processor.generatePixelQueue();
+      log(
+        `📊 Blue Marble generó: ${imageState.remainingPixels.length} píxeles con alignment correcto`,
+      );
+    } else {
+      // Fallback: usar función antigua (sin alignment)
+      log('⚠️ FALLBACK: Blue Marble processor no disponible, usando función antigua...');
+      imageState.remainingPixels = generatePixelQueue(
+        imageData,
+        startPosition,
+        imageState.tileX,
+        imageState.tileY,
+      );
+      log(
+        `📊 Función antigua generó: ${imageState.remainingPixels.length} píxeles (SIN alignment)`,
+      );
+    }
 
     // Si hay una posición de continuación, filtrar píxeles ya pintados
     if (imageState.lastPosition.x > 0 || imageState.lastPosition.y > 0) {
@@ -274,6 +290,14 @@ export async function paintPixelBatch(batch) {
       const group = tileGroups.get(key);
       group.coords.push(pixel.localX, pixel.localY);
       group.colors.push(colorId);
+
+      // Log first few pixels to trace coordinates
+      if (tileGroups.get(key).coords.length <= 6) {
+        // First 3 pixels (2 coords each)
+        log(
+          `[PAINTER] 🎨 Pixel ${Math.ceil(tileGroups.get(key).coords.length / 2)}: tile(${pixel.tileX},${pixel.tileY}) local(${pixel.localX},${pixel.localY}) imagePos(${pixel.imageX || '?'},${pixel.imageY || '?'}) color(${colorId})`,
+        );
+      }
     }
 
     // If no valid pixels, return error
