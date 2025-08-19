@@ -1,6 +1,6 @@
 // === [Sistema de overlay basado en Blue Marble - Intercepción de tiles] ===
 (() => {
-  const TILE_SIZE = 3000; // Tamaño de tile en WPlace
+  const TILE_SIZE = 4000; // Updated to 4000 based on current WPlace
 
   const state = {
     enabled: false,
@@ -17,7 +17,7 @@
     // Sistema de intercepción
     originalFetch: null,
     fetchedBlobQueue: new Map(),
-    isIntercepting: false
+    isIntercepting: false,
   };
 
   function injectStyles() {
@@ -32,29 +32,30 @@
     state.originalFetch = window.fetch;
     state.isIntercepting = true;
 
-    window.fetch = async function(...args) {
+    window.fetch = async function (...args) {
       const response = await state.originalFetch.apply(this, args);
       const cloned = response.clone();
 
-      const endpointName = ((args[0] instanceof Request) ? args[0]?.url : args[0]) || 'ignore';
+      const endpointName = (args[0] instanceof Request ? args[0]?.url : args[0]) || 'ignore';
       const contentType = cloned.headers.get('content-type') || '';
 
       // Interceptar solo tiles de imagen (como Blue Marble)
-      if (contentType.includes('image/') && 
-          endpointName.includes('/tiles/') && 
-          !endpointName.includes('openfreemap') && 
-          !endpointName.includes('maps')) {
-
+      if (
+        contentType.includes('image/') &&
+        endpointName.includes('/tiles/') &&
+        !endpointName.includes('openfreemap') &&
+        !endpointName.includes('maps')
+      ) {
         console.log('[PLAN OVERLAY] Intercepting tile request:', endpointName);
 
         try {
           const blob = await cloned.blob();
           const processedBlob = await drawPlanOnTile(blob, endpointName);
-          
+
           return new Response(processedBlob, {
             headers: cloned.headers,
             status: cloned.status,
-            statusText: cloned.statusText
+            statusText: cloned.statusText,
           });
         } catch (error) {
           console.error('[PLAN OVERLAY] Error processing tile:', error);
@@ -107,10 +108,10 @@
     // Procesar el tile (como Blue Marble)
     const drawSize = state.tileSize * state.drawMult;
     const tileBitmap = await createImageBitmap(tileBlob);
-    
+
     const canvas = new OffscreenCanvas(drawSize, drawSize);
     const context = canvas.getContext('2d');
-    
+
     context.imageSmoothingEnabled = false;
     context.clearRect(0, 0, drawSize, drawSize);
     context.drawImage(tileBitmap, 0, 0, drawSize, drawSize);
@@ -124,7 +125,7 @@
   function getPixelsForTile(tileX, tileY) {
     if (!state.pixelPlan || !state.pixelPlan.pixels) return [];
 
-    return state.pixelPlan.pixels.filter(pixel => {
+    return state.pixelPlan.pixels.filter((pixel) => {
       // Calcular en qué tile está este píxel
       const pixelTileX = Math.floor(pixel.globalX / TILE_SIZE);
       const pixelTileY = Math.floor(pixel.globalY / TILE_SIZE);
@@ -145,9 +146,12 @@
       const localY = (pixel.globalY - tileStartY) * state.drawMult + 1;
 
       // Solo dibujar si está dentro del tile
-      if (localX >= 0 && localX < state.tileSize * state.drawMult && 
-          localY >= 0 && localY < state.tileSize * state.drawMult) {
-        
+      if (
+        localX >= 0 &&
+        localX < state.tileSize * state.drawMult &&
+        localY >= 0 &&
+        localY < state.tileSize * state.drawMult
+      ) {
         context.fillStyle = `rgb(${pixel.r},${pixel.g},${pixel.b})`;
         context.fillRect(localX, localY, 1, 1);
       }
@@ -157,14 +161,17 @@
     if (state.nextBatchCount > 0) {
       context.globalAlpha = 1.0;
       const batchPixels = pixels.slice(0, state.nextBatchCount);
-      
+
       for (const pixel of batchPixels) {
         const localX = (pixel.globalX - tileStartX) * state.drawMult + 1;
         const localY = (pixel.globalY - tileStartY) * state.drawMult + 1;
 
-        if (localX >= 0 && localX < state.tileSize * state.drawMult && 
-            localY >= 0 && localY < state.tileSize * state.drawMult) {
-          
+        if (
+          localX >= 0 &&
+          localX < state.tileSize * state.drawMult &&
+          localY >= 0 &&
+          localY < state.tileSize * state.drawMult
+        ) {
           context.fillStyle = `rgb(${pixel.r},${pixel.g},${pixel.b})`;
           context.fillRect(localX, localY, 1, 1);
         }
@@ -175,13 +182,13 @@
   // === API PÚBLICA (compatible con la anterior) ===
   function setEnabled(enabled) {
     state.enabled = !!enabled;
-    
+
     if (state.enabled) {
       startFetchInterception();
     } else {
       stopFetchInterception();
     }
-    
+
     console.log(`[PLAN OVERLAY] setEnabled: ${state.enabled}`);
   }
 
@@ -196,7 +203,7 @@
     const pixels = [];
     for (const item of planItems) {
       let globalX, globalY;
-      
+
       if (typeof item.tileX === 'number' && typeof item.localX === 'number') {
         // Formato tile/local
         globalX = item.tileX * TILE_SIZE + item.localX;
@@ -216,7 +223,7 @@
         globalY: globalY,
         r: item.color?.r || 0,
         g: item.color?.g || 0,
-        b: item.color?.b || 0
+        b: item.color?.b || 0,
       });
     }
 
@@ -227,7 +234,7 @@
     state.imageHeight = opts.imageHeight || null;
 
     console.log(`[PLAN OVERLAY] Plan set: ${pixels.length} pixels`);
-    
+
     if (typeof opts.enabled === 'boolean') {
       setEnabled(opts.enabled);
     }
@@ -272,7 +279,9 @@
     endSelectionMode,
     render: () => {}, // No-op en sistema de tiles
     cleanup,
-    get state() { return state; }
+    get state() {
+      return state;
+    },
   };
 
   console.log('[PLAN OVERLAY] Blue Marble tile system ready');

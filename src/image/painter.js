@@ -4,6 +4,15 @@ import { postPixelBatchImage } from '../core/wplace-api.js';
 import { getTurnstileToken } from '../core/turnstile.js';
 import { imageState, IMAGE_DEFAULTS } from './config.js';
 import { t } from '../locales/index.js';
+import { tileDetector } from '../core/tile-detector.js';
+
+/**
+ * Get actual tile size (detected or default)
+ */
+function getActualTileSize() {
+  const detectedSize = tileDetector.getDetectedSize();
+  return detectedSize || IMAGE_DEFAULTS.TILE_SIZE;
+}
 
 export async function processImage(imageData, startPosition, onProgress, onComplete, onError) {
   const { width, height } = imageData;
@@ -222,43 +231,80 @@ export async function paintPixelBatch(batch) {
       return { success: false, painted: 0, error: 'Lote vacío' };
     }
 
-    // Convertir el lote al formato esperado por la API
-    const coords = [];
-    const colors = [];
-    let tileX = null;
-    let tileY = null;
+    // Group pixels by tile to avoid sending pixels from different tiles in one request
+    const tileGroups = new Map(); // key: "tileX:tileY" -> { tileX, tileY, coords: [], colors: [] }
 
     for (const pixel of batch) {
-      coords.push(pixel.localX, pixel.localY);
-      colors.push(pixel.color.id || pixel.color.value || 1);
+      // Skip invalid pixels
+      if (!pixel) {
+        log('paintPixelBatch: skipping undefined pixel');
+        continue;
+      }
 
-      // Tomar tileX/tileY del primer píxel (todos deberían tener el mismo tile)
-      if (tileX === null) {
-        tileX = pixel.tileX;
-        tileY = pixel.tileY;
+      // Validate that we have coordinates and color
+      if (!pixel.localX || !pixel.localY || pixel.tileX == null || pixel.tileY == null) {
+        log('paintPixelBatch: skipping pixel with missing coordinates', pixel);
+        continue;
+      }
+
+      // Validate color - this fixes the core issue
+      if (!pixel.color) {
+        log('paintPixelBatch: skipping pixel with missing color', pixel);
+        continue;
+      }
+
+      // Get color ID safely
+      const colorId = pixel.color.id || pixel.color.value || null;
+      if (colorId === null) {
+        log('paintPixelBatch: skipping pixel with invalid color', pixel);
+        continue;
+      }
+
+      // Group by tile
+      const key = `${pixel.tileX}:${pixel.tileY}`;
+      if (!tileGroups.has(key)) {
+        tileGroups.set(key, { tileX: pixel.tileX, tileY: pixel.tileY, coords: [], colors: [] });
+      }
+
+      const group = tileGroups.get(key);
+      group.coords.push(pixel.localX, pixel.localY);
+      group.colors.push(colorId);
+    }
+
+    // If no valid pixels, return error
+    if (tileGroups.size === 0) {
+      return { success: false, painted: 0, error: 'No valid pixels in batch' };
+    }
+
+    // Get token once for all requests
+    const token = await getTurnstileToken(IMAGE_DEFAULTS.SITEKEY);
+
+    // Send each tile group as a separate request
+    let totalPainted = 0;
+    for (const [key, group] of tileGroups.entries()) {
+      try {
+        const response = await postPixelBatchImage(
+          group.tileX,
+          group.tileY,
+          group.coords,
+          group.colors,
+          token,
+        );
+
+        if (response.status === 200) {
+          totalPainted += response.painted || 0;
+        } else {
+          log('paintPixelBatch: API error for tile', key, response?.status, response?.json);
+        }
+      } catch (err) {
+        log('Error sending pixels for tile group:', key, err);
       }
     }
 
-    // Obtener token de Turnstile
-    const token = await getTurnstileToken(IMAGE_DEFAULTS.SITEKEY);
-
-    // Enviar píxeles usando el formato correcto
-    const response = await postPixelBatchImage(tileX, tileY, coords, colors, token);
-
-    if (response.status === 200) {
-      return {
-        success: true,
-        painted: response.painted,
-        response: response.json,
-      };
-    } else {
-      return {
-        success: false,
-        painted: 0,
-        error: response.json?.message || `HTTP ${response.status}`,
-        status: response.status,
-      };
-    }
+    return {
+      success: totalPainted > 0,
+      painted: totalPainted,
+    };
   } catch (error) {
     log('Error en paintPixelBatch:', error);
     return {
@@ -467,23 +513,73 @@ function generatePixelQueue(imageData, startPosition, tileX, tileY) {
   const { pixels } = imageData;
   const { x: localStartX, y: localStartY } = startPosition;
   const queue = [];
+  let skippedPixels = 0;
 
   for (const pixelData of pixels) {
-    const globalX = localStartX + pixelData.x;
-    const globalY = localStartY + pixelData.y;
+    // Validate pixel data exists and has required coordinates
+    // Check for both x/y and imageX/imageY formats
+    const hasCoords =
+      (typeof pixelData.x === 'number' && typeof pixelData.y === 'number') ||
+      (typeof pixelData.imageX === 'number' && typeof pixelData.imageY === 'number');
+
+    if (!pixelData || !hasCoords) {
+      skippedPixels++;
+      log('generatePixelQueue: skipping pixel with missing coordinates', pixelData);
+      continue;
+    }
+
+    // Get coordinates (prefer imageX/imageY for BlueMarblelImageProcessor compatibility)
+    const imageX = pixelData.imageX ?? pixelData.x;
+    const imageY = pixelData.imageY ?? pixelData.y;
+
+    // Validate color exists - BlueMarblelImageProcessor uses 'color' not 'targetColor'
+    const pixelColor = pixelData.color || pixelData.targetColor;
+    if (!pixelColor || (!pixelColor.id && !pixelColor.value)) {
+      skippedPixels++;
+      log('generatePixelQueue: skipping pixel with missing/invalid color', pixelData);
+      continue;
+    }
+
+    // Use pre-calculated coordinates from BlueMarblelImageProcessor if available
+    // Otherwise calculate them manually for backward compatibility
+    let finalTileX, finalTileY, finalLocalX, finalLocalY;
+
+    if (
+      pixelData.tileX != null &&
+      pixelData.tileY != null &&
+      pixelData.localX != null &&
+      pixelData.localY != null
+    ) {
+      // Use coordinates from BlueMarblelImageProcessor (preferred)
+      finalTileX = pixelData.tileX;
+      finalTileY = pixelData.tileY;
+      finalLocalX = pixelData.localX;
+      finalLocalY = pixelData.localY;
+    } else {
+      // Calculate manually for backward compatibility
+      const globalX = localStartX + imageX;
+      const globalY = localStartY + imageY;
+      finalTileX = tileX;
+      finalTileY = tileY;
+      finalLocalX = globalX;
+      finalLocalY = globalY;
+    }
 
     queue.push({
-      imageX: pixelData.x,
-      imageY: pixelData.y,
-      localX: globalX,
-      localY: globalY,
-      tileX: tileX,
-      tileY: tileY,
-      color: pixelData.targetColor,
+      imageX: imageX,
+      imageY: imageY,
+      localX: finalLocalX,
+      localY: finalLocalY,
+      tileX: finalTileX,
+      tileY: finalTileY,
+      color: pixelColor,
       originalColor: pixelData.originalColor,
     });
   }
 
+  if (skippedPixels > 0) {
+    log(`⚠️ Se omitieron ${skippedPixels} píxeles inválidos durante la generación de la cola`);
+  }
   log(`Cola de píxeles generada: ${queue.length} píxeles para pintar`);
   return queue;
 }

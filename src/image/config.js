@@ -6,7 +6,7 @@ export const IMAGE_DEFAULTS = {
   TRANSPARENCY_THRESHOLD: 100,
   WHITE_THRESHOLD: 250,
   LOG_INTERVAL: 10,
-  TILE_SIZE: 3000,
+  TILE_SIZE: 4000, // Updated to 4000 based on current WPlace
   PIXELS_PER_BATCH: 20,
   CHARGE_REGEN_MS: 30000,
   THEME: {
@@ -17,8 +17,8 @@ export const IMAGE_DEFAULTS = {
     highlight: '#775ce3',
     success: '#00ff00',
     error: '#ff0000',
-    warning: '#ffaa00'
-  }
+    warning: '#ffaa00',
+  },
 };
 
 // Esta función ahora retorna las traducciones dinámicamente
@@ -30,14 +30,14 @@ export function getImageTexts() {
 export function getImageText(key, params = {}) {
   const texts = getImageTexts();
   let text = texts[key] || key;
-  
+
   // Interpolar parámetros
   if (params && Object.keys(params).length > 0) {
     text = text.replace(/\{(\w+)\}/g, (match, paramKey) => {
       return params[paramKey] !== undefined ? params[paramKey] : match;
     });
   }
-  
+
   return text;
 }
 
@@ -46,7 +46,7 @@ export const TEXTS = {
   get es() {
     console.warn('TEXTS.es está deprecated. Usa getImageTexts() en su lugar.');
     return getImageTexts();
-  }
+  },
 };
 
 export const imageState = {
@@ -83,5 +83,5 @@ export const imageState = {
   lastChargeUpdate: 0,
   chargeDecimalPart: 0,
   originalImageName: null,
-  retryCount: 0 // Contador de reintentos para estadísticas
+  retryCount: 0, // Contador de reintentos para estadísticas
 };

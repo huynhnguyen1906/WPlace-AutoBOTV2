@@ -1,5 +1,7 @@
 // === [Procesador de imágenes basado en Blue Marble] ===
 import { log } from '../core/logger.js';
+import { tileDetector } from '../core/tile-detector.js';
+import { IMAGE_DEFAULTS } from './config.js';
 
 /**
  * Procesador de imágenes con arquitectura Blue Marble
@@ -15,6 +17,7 @@ export class BlueMarblelImageProcessor {
     this.tileSize = 1000; // Tamaño de tile en píxeles (como Blue Marble)
     this.drawMult = 3; // Factor de escalado (DEBE ser impar)
     this.shreadSize = 3; // Alias para drawMult para compatibilidad
+    this.actualTileSize = IMAGE_DEFAULTS.TILE_SIZE; // Tamaño real del sitio (será detectado)
 
     // Estado del procesamiento
     this.bitmap = null;
@@ -30,6 +33,26 @@ export class BlueMarblelImageProcessor {
     this.templateTiles = {};
     this.templateTilesBuffers = {};
     this.tilePrefixes = new Set();
+
+    // Auto-detect tile size
+    this.initializeTileSize();
+  }
+
+  /**
+   * Detect and initialize proper tile size
+   */
+  async initializeTileSize() {
+    try {
+      const detectedSize = await tileDetector.autoDetect();
+      if (detectedSize) {
+        this.actualTileSize = detectedSize;
+        log(`[BLUE MARBLE] Using detected tile size: ${detectedSize}`);
+      } else {
+        log(`[BLUE MARBLE] Using default tile size: ${this.actualTileSize}`);
+      }
+    } catch (error) {
+      log('[BLUE MARBLE] Error detecting tile size, using default:', error);
+    }
   }
 
   async load() {
@@ -148,7 +171,10 @@ export class BlueMarblelImageProcessor {
   setCoords(tileX, tileY, pixelX, pixelY) {
     this.coords = [tileX, tileY, pixelX, pixelY];
     log(
-      `[BLUE MARBLE] Coordenadas establecidas: tile(${tileX},${tileY}) pixel(${pixelX},${pixelY})`,
+      `[BLUE MARBLE] ✅ Coordenadas establecidas: tile(${tileX},${tileY}) pixel(${pixelX},${pixelY})`,
+    );
+    log(
+      `[BLUE MARBLE] 📍 Esto significa: imagen empezará en posición global (${tileX * this.actualTileSize + pixelX}, ${tileY * this.actualTileSize + pixelY})`,
     );
   }
 
@@ -374,11 +400,18 @@ export class BlueMarblelImageProcessor {
       throw new Error('Imagen no cargada. Llama a load() primero.');
     }
 
-    log('[BLUE MARBLE] Generando cola de píxeles...');
+    log('[BLUE MARBLE] 🎯 Iniciando generación de cola de píxeles...');
+    log(`[BLUE MARBLE] 📐 Tamaño actual de tile: ${this.actualTileSize}`);
+    log(
+      `[BLUE MARBLE] 🗂️ Coordenadas almacenadas: tile(${this.coords[0]},${this.coords[1]}) pixel(${this.coords[2] || 0},${this.coords[3] || 0})`,
+    );
 
     const queue = [];
-    const baseX = this.coords[0] * 1000 + (this.coords[2] || 0); // Coordenada global base X
-    const baseY = this.coords[1] * 1000 + (this.coords[3] || 0); // Coordenada global base Y
+    const baseX = this.coords[0] * this.actualTileSize + (this.coords[2] || 0); // Coordenada global base X
+    const baseY = this.coords[1] * this.actualTileSize + (this.coords[3] || 0); // Coordenada global base Y
+
+    log(`[BLUE MARBLE] 📍 Posición base calculada: global(${baseX}, ${baseY})`);
+    log(`[BLUE MARBLE] 📏 Dimensiones imagen: ${this.imageWidth}x${this.imageHeight}`);
 
     // Usar canvas 1:1 para leer píxeles exactos
     const readCanvas = new OffscreenCanvas(this.imageWidth, this.imageHeight);
@@ -410,11 +443,11 @@ export class BlueMarblelImageProcessor {
         const globalX = baseX + x;
         const globalY = baseY + y;
 
-        // Calcular coordenadas de tile
-        const tileX = Math.floor(globalX / 1000);
-        const tileY = Math.floor(globalY / 1000);
-        const localX = globalX % 1000;
-        const localY = globalY % 1000;
+        // Calcular coordenadas de tile (usar actualTileSize detectado)
+        const tileX = Math.floor(globalX / this.actualTileSize);
+        const tileY = Math.floor(globalY / this.actualTileSize);
+        const localX = globalX % this.actualTileSize;
+        const localY = globalY % this.actualTileSize;
 
         // Obtener metadatos del color
         const colorMeta = this.rgbToMeta.get(colorKey) || { id: 0, name: 'Unknown' };
@@ -441,10 +474,26 @@ export class BlueMarblelImageProcessor {
           },
           originalColor: { r, g, b, alpha },
         });
+
+        // Log primer píxel válido como ejemplo
+        if (queue.length === 1) {
+          log(
+            `[BLUE MARBLE] 🎨 Primer píxel válido: imagen(${x},${y}) → global(${globalX},${globalY}) → tile(${tileX},${tileY}) local(${localX},${localY}) color(${r},${g},${b})`,
+          );
+        }
       }
     }
 
-    log(`[BLUE MARBLE] Cola generada: ${queue.length} píxeles válidos`);
+    log(`[BLUE MARBLE] ✅ Cola generada: ${queue.length} píxeles válidos`);
+    log(
+      `[BLUE MARBLE] 📊 Rango de píxeles: X(${baseX}-${baseX + this.imageWidth - 1}), Y(${baseY}-${baseY + this.imageHeight - 1})`,
+    );
+    if (queue.length > 0) {
+      const firstPixel = queue[0];
+      const lastPixel = queue[queue.length - 1];
+      log(`[BLUE MARBLE] 📋 Primer píxel: global(${firstPixel.globalX},${firstPixel.globalY})`);
+      log(`[BLUE MARBLE] 📋 Último píxel: global(${lastPixel.globalX},${lastPixel.globalY})`);
+    }
     return queue;
   }
 

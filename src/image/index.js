@@ -279,12 +279,21 @@ export async function runImage() {
                       const localX = bodyData.coords[0];
                       const localY = bodyData.coords[1];
 
+                      log(`[AUTO-IMAGE] 👆 Usuario hizo clic: local(${localX}, ${localY})`);
+
                       // Extraer tile de la URL de forma más robusta
                       const tileMatch = url.match(/\/s0\/pixel\/(-?\d+)\/(-?\d+)/);
                       if (tileMatch && !positionCaptured) {
                         positionCaptured = true;
                         const tileX = parseInt(tileMatch[1]);
                         const tileY = parseInt(tileMatch[2]);
+
+                        log(
+                          `[AUTO-IMAGE] 📍 Posición capturada: tile(${tileX}, ${tileY}) + pixel(${localX}, ${localY})`,
+                        );
+                        log(
+                          `[AUTO-IMAGE] 🌍 Esto corresponde a coordenada global: (${tileX * 4000 + localX}, ${tileY * 4000 + localY})`,
+                        );
 
                         // Guardar coordenadas tile/pixel
                         imageState.tileX = tileX;
@@ -295,6 +304,9 @@ export async function runImage() {
                         // Actualizar coordenadas del procesador Blue Marble
                         if (imageState.imageData && imageState.imageData.processor) {
                           const processor = imageState.imageData.processor;
+                          log(
+                            `[AUTO-IMAGE] 🔄 Llamando setCoords(${tileX}, ${tileY}, ${localX}, ${localY})`,
+                          );
                           processor.setCoords(tileX, tileY, localX, localY);
 
                           // Generar tiles de template una vez que tenemos coordenadas
