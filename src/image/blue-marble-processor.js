@@ -500,6 +500,27 @@ export class BlueMarblelImageProcessor {
           log(`[BLUE MARBLE] 📊 Imagen position: (${x}, ${y})`);
           log(`[BLUE MARBLE] 📊 Global position: (${globalX}, ${globalY})`);
           log(`[BLUE MARBLE] ✅ Esto debería coincidir con user click: (${baseX}, ${baseY})`);
+          log(
+            `[BLUE MARBLE] 🔍 VERIFICACIÓN: ¿Este es el firstValidPixel(${firstValidPixelX}, ${firstValidPixelY})?`,
+          );
+
+          // CRITICAL CHECK: Este pixel debe ser exactamente el firstValidPixel
+          if (x !== firstValidPixelX || y !== firstValidPixelY) {
+            log(
+              `[BLUE MARBLE] ❌ ERROR: Primer pixel en queue (${x}, ${y}) NO coincide con firstValidPixel (${firstValidPixelX}, ${firstValidPixelY})`,
+            );
+            log(`[BLUE MARBLE] ❌ Esto causará desalineación! Investigando...`);
+
+            // Log info about this unexpected pixel
+            log(
+              `[BLUE MARBLE] 🐛 Pixel inesperado: color(${r},${g},${b}) alpha(${alpha}) colorKey(${colorKey})`,
+            );
+            log(
+              `[BLUE MARBLE] 🐛 allowedColorsSet.has(${colorKey}): ${this.allowedColorsSet.has(colorKey)}`,
+            );
+          } else {
+            log(`[BLUE MARBLE] ✅ CONFIRMADO: Primer pixel coincide con firstValidPixel`);
+          }
         }
 
         // Calcular coordenadas de tile (usar actualTileSize detectado)
