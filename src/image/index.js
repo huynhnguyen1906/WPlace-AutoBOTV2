@@ -334,6 +334,12 @@ export async function runImage() {
                           log(
                             `✅ Cola de píxeles generada: ${pixelQueue.length} píxeles para overlay`,
                           );
+                          log(
+                            `[AUTO-IMAGE] 📊 imageState.remainingPixels set to: ${imageState.remainingPixels?.length || 0} pixels`,
+                          );
+                          log(
+                            `[AUTO-IMAGE] 📊 First pixel from Blue Marble: global(${pixelQueue[0]?.globalX}, ${pixelQueue[0]?.globalY}) local(${pixelQueue[0]?.localX}, ${pixelQueue[0]?.localY})`,
+                          );
                         } else {
                           log(`[AUTO-IMAGE] ❌ ERROR: Processor no encontrado!`);
                           log(

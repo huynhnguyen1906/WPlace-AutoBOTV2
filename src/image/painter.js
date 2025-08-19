@@ -22,12 +22,23 @@ export async function processImage(imageData, startPosition, onProgress, onCompl
     `Iniciando pintado: imagen(${width}x${height}) inicio LOCAL(${localStartX},${localStartY}) tile(${imageState.tileX},${imageState.tileY})`,
   );
 
-  // Generar cola de píxeles si no existe USANDO BLUE MARBLE PROCESSOR
-  if (
+  // DEBUG: Check current state of remainingPixels
+  log(`[PAINTER] 🔍 DEBUGGING imageState.remainingPixels:`);
+  log(`[PAINTER] 📊 exists: ${!!imageState.remainingPixels}`);
+  log(`[PAINTER] 📊 length: ${imageState.remainingPixels?.length || 0}`);
+  log(
+    `[PAINTER] 📊 lastPosition: (${imageState.lastPosition?.x || 0}, ${imageState.lastPosition?.y || 0})`,
+  );
+
+  const needsGeneration =
     !imageState.remainingPixels ||
     imageState.remainingPixels.length === 0 ||
-    (imageState.lastPosition.x === 0 && imageState.lastPosition.y === 0)
-  ) {
+    (imageState.lastPosition.x === 0 && imageState.lastPosition.y === 0);
+
+  log(`[PAINTER] 📊 needsGeneration: ${needsGeneration}`);
+
+  // Generar cola de píxeles si no existe USANDO BLUE MARBLE PROCESSOR
+  if (needsGeneration) {
     log('🔄 Generando cola de píxeles con Blue Marble Processor...');
 
     // PRIORIDAD: Usar Blue Marble processor si está disponible
